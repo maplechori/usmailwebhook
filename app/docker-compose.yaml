@@ -1,0 +1,11 @@
+services:
+  web:
+    environment:
+      - PYTHONUNBUFFERED=1
+    build: .
+    restart: always
+    ports:
+      - target: 4343
+        published: 4343
+        protocol: tcp
+        mode: host

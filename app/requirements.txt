@@ -1,0 +1,15 @@
+torch==2.4.1
+numpy
+opencv-python
+pandas
+scipy
+seaborn
+torchvision
+ultralytics
+ultralytics-thop
+flask
+requests
+gitpython
+setuptools
+huggingface_hub
+pillow
