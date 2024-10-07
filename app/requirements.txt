@@ -13,3 +13,4 @@ gitpython
 setuptools
 huggingface_hub
 pillow
+boto3

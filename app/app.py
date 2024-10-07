@@ -11,6 +11,7 @@ import warnings
 
 from huggingface_hub import hf_hub_download
 from flask import Flask, request, Response, json
+from .mobile_push import push_mobile_message
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -37,7 +38,7 @@ def detect_usmail():
         )
 
     desc = request.json.get('desc')
-    if 'Garage' not in desc:
+    if 'Garage' not in desc or 'Porch' not in desc:
         logger.info('Motion detected by different camera')
         return Response(
             response=json.dumps({
@@ -68,7 +69,7 @@ def detect_usmail():
     temporary_file = tempfile.NamedTemporaryFile(delete=False)
 
     with open(temporary_file.name, "wb") as jpg:
-        logger.info(f"Writing temporary file: {jpg.name}")
+        logger.debug(f"Writing temporary file: {jpg.name}")
         shutil.copyfileobj(response.raw, jpg)
         temporary_file.close()
         del response
@@ -81,7 +82,6 @@ def detect_usmail():
 
     if img is not None and img.any():
         results = model(img)
-
         detections = results.pandas().xyxy[0]
 
         if not detections.empty:
@@ -89,7 +89,7 @@ def detect_usmail():
             if not df.empty and df["confidence"].iloc[0] > 0.20:
                 logger.info("Found US Mail symbol!")
                 confidence = df["confidence"].iloc[0]
-
+                push_mobile_message()
                 return Response(response=json.dumps({
                     'message': f'US mail symbol identified on image with {confidence} confidence'
                 }),
