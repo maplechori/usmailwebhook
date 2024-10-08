@@ -97,8 +97,6 @@ def detect_usmail():
                 push_mobile_message()
 
                 current_time = "{:%Y_%m_%d_%H_%M_%S}".format(datetime.now())
-                logger.info(current_time)
-
                 cv2.imwrite(f'usps_detection_{current_time}.jpg', img)
 
                 return Response(response=json.dumps({
