@@ -9,6 +9,7 @@ import platform
 import shutil
 import warnings
 
+from datetime import datetime
 from huggingface_hub import hf_hub_download
 from flask import Flask, request, Response, json
 from .mobile_push import push_mobile_message
@@ -38,7 +39,7 @@ def detect_usmail():
         )
 
     desc = request.json.get('desc')
-    if 'Garage' not in desc or 'Porch' not in desc:
+    if 'Garage' not in desc and 'Porch' not in desc:
         logger.info('Motion detected by different camera')
         return Response(
             response=json.dumps({
@@ -48,8 +49,8 @@ def detect_usmail():
             mimetype='application/json'
         )
 
-    plt = platform.system()
-    if plt == 'Windows':
+    plat_form = platform.system()
+    if plat_form == 'Windows':
         pathlib.PosixPath = pathlib.WindowsPath
     else:
         pathlib.WindowsPath = pathlib.PosixPath
@@ -83,13 +84,23 @@ def detect_usmail():
     if img is not None and img.any():
         results = model(img)
         detections = results.pandas().xyxy[0]
+        logger.info(detections)
 
         if not detections.empty:
+            x1, y1, x2, y2, confidence, class_id, name = detections.loc[0]
+            cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+
             df = detections.loc[detections["name"] == "us_mail_symbol"]
-            if not df.empty and df["confidence"].iloc[0] > 0.20:
-                logger.info("Found US Mail symbol!")
+            if not df.empty and df["confidence"].iloc[0] > 0.70:
                 confidence = df["confidence"].iloc[0]
+                logger.info(f"Found US Mail symbol with a confidence of {confidence}")
                 push_mobile_message()
+
+                current_time = "{:%Y_%m_%d_%H_%M_%S}".format(datetime.now())
+                logger.info(current_time)
+
+                cv2.imwrite(f'usps_detection_{current_time}.jpg', img)
+
                 return Response(response=json.dumps({
                     'message': f'US mail symbol identified on image with {confidence} confidence'
                 }),
