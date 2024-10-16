@@ -8,6 +8,7 @@ import pathlib
 import platform
 import shutil
 import warnings
+import re
 
 from datetime import datetime
 from huggingface_hub import hf_hub_download
@@ -39,11 +40,14 @@ def detect_usmail():
         )
 
     desc = request.json.get('desc')
-    if 'Garage' not in desc and 'Porch' not in desc:
-        logger.info('Motion detected by different camera')
+    camera = re.search(r".*:(?P<camera>.*)\..*", desc, re.MULTILINE).group(1).lstrip()
+
+    logger.info(f'Motion detected in {camera}')
+
+    if camera not in ['Garage', 'Porch']:
         return Response(
             response=json.dumps({
-                'message': 'Service only available for Garage camera'
+                'message': 'Service only available for Garage or Porch cameras'
             }),
             status=200,
             mimetype='application/json'
@@ -58,7 +62,7 @@ def detect_usmail():
     logger.info(f"Downloading image {url}")
     response = requests.get(url, stream=True)
 
-    if not url.endswith('jpg'):
+    if not url.endswith('jpg') and not url.endswith('jpeg'):
         return Response(
             response=json.dumps({
                 'message': 'This service only accepts JPEG images'
@@ -87,23 +91,32 @@ def detect_usmail():
         logger.info(detections)
 
         if not detections.empty:
-            x1, y1, x2, y2, confidence, class_id, name = detections.loc[0]
-            cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+            found = False
+            for index, row in detections.iterrows():
 
-            df = detections.loc[detections["name"] == "us_mail_symbol"]
-            if not df.empty and df["confidence"].iloc[0] > 0.70:
-                confidence = df["confidence"].iloc[0]
-                logger.info(f"Found US Mail symbol with a confidence of {confidence}")
+                x1, y1, x2, y2, confidence, class_id, name = row
+                cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+
+                if camera == 'Garage':
+                    required_confidence_filter = 0.36
+                else:
+                    required_confidence_filter = 0.70  # Neighbor's car keep giving false positive, need more training
+
+                if row["name"] == "us_mail_symbol" and row["confidence"] > required_confidence_filter:
+                    confidence = row["confidence"]
+                    logger.info(f"Found US Mail symbol with a confidence of {confidence}")
+                    found = True
+
+            if found:
                 push_mobile_message()
-
                 current_time = "{:%Y_%m_%d_%H_%M_%S}".format(datetime.now())
                 cv2.imwrite(f'usps_detection_{current_time}.jpg', img)
 
-                return Response(response=json.dumps({
-                    'message': f'US mail symbol identified on image with {confidence} confidence'
-                }),
-                    status=200,
-                    mimetype='application/json')
+            return Response(response=json.dumps({
+            'message': f'US mail symbol identified on image '
+        }),
+            status=200,
+            mimetype='application/json')
 
     return Response(response=json.dumps({
         'message': 'Unable to identify object in file'
